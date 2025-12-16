@@ -1,0 +1,91 @@
+"""
+Pydantic schemas for prediction request and response validation.
+"""
+
+from pydantic import BaseModel, Field, field_validator
+from typing import List, Dict, Any
+
+
+class PredictionRequest(BaseModel):
+    """
+    Schema for prediction request validation.
+    Note: Image is handled separately as UploadFile in the endpoint.
+    """
+    age: int = Field(..., ge=0, le=120, description="Patient age in years")
+    sex: str = Field(..., description="Patient sex (male/female)")
+    location: str = Field(..., description="Lesion location on body")
+    diameter: float = Field(..., gt=0, description="Lesion diameter in millimeters")
+
+    @field_validator("sex")
+    @classmethod
+    def validate_sex(cls, v: str) -> str:
+        """Validate sex field accepts only male or female."""
+        v_lower = v.lower()
+        if v_lower not in ["male", "female"]:
+            raise ValueError("Sex must be 'male' or 'female'")
+        return v_lower
+
+    @field_validator("location")
+    @classmethod
+    def validate_location(cls, v: str) -> str:
+        """Validate and normalize location field."""
+        valid_locations = [
+            "head", "neck", "trunk", "upper_extremity", "lower_extremity",
+            "abdomen", "back", "chest", "arm", "leg", "hand", "foot", "face"
+        ]
+        v_lower = v.lower().replace(" ", "_")
+        if v_lower not in valid_locations:
+            raise ValueError(f"Location must be one of: {', '.join(valid_locations)}")
+        return v_lower
+
+
+class PredictionResponse(BaseModel):
+    """
+    Schema for prediction response.
+    Contains final probability and detailed outputs from each model.
+    """
+    final_probability: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Final combined malignancy probability (0-1)"
+    )
+    model_a_probability: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Model A (deep learning) malignancy probability"
+    )
+    model_c_probability: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Model C (tabular) malignancy probability"
+    )
+    extracted_features: List[float] = Field(
+        ...,
+        min_length=18,
+        max_length=18,
+        description="18 features extracted by Model B"
+    )
+    metadata: Dict[str, Any] = Field(
+        ...,
+        description="Input metadata used for prediction"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "final_probability": 0.65,
+                "model_a_probability": 0.72,
+                "model_c_probability": 0.58,
+                "extracted_features": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,
+                                       1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2],
+                "metadata": {
+                    "age": 45,
+                    "sex": "female",
+                    "location": "back",
+                    "diameter": 6.5
+                }
+            }
+        }
