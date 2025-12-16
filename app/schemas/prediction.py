@@ -68,6 +68,10 @@ class PredictionResponse(BaseModel):
         max_length=18,
         description="18 features extracted by Model B"
     )
+    risk_category: str = Field(
+        ...,
+        description="Risk category: low, medium, or high"
+    )
     metadata: Dict[str, Any] = Field(
         ...,
         description="Input metadata used for prediction"
@@ -81,6 +85,7 @@ class PredictionResponse(BaseModel):
                 "model_c_probability": 0.58,
                 "extracted_features": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,
                                        1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2],
+                "risk_category": "medium",
                 "metadata": {
                     "age": 45,
                     "sex": "female",

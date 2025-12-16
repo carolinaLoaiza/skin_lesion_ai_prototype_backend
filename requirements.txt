@@ -9,6 +9,8 @@ tensorflow==2.20.0
 scikit-learn==1.6.1
 numpy==2.2.1
 pandas==2.2.3
+torch==2.5.1
+torchvision==0.20.1
 
 # Image Processing
 Pillow==11.0.0
