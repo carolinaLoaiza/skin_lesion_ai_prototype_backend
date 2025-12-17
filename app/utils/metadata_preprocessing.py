@@ -1,296 +1,273 @@
 """
 Metadata preprocessing utilities for clinical features.
 
-This module provides functions to preprocess and encode clinical metadata
-(age, sex, location, diameter) for use in Model C (tabular classifier).
+This module provides centralized preprocessing for clinical metadata
+(age, sex, location, diameter) used by Models B and C.
 
-The preprocessing must match the encoding used during model training.
+IMPORTANT: The preprocessing must match exactly what was done during training.
 """
 
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Tuple
+from typing import Dict, List
 from app.core.logger import logger
 
 
-# Valid anatomical locations (normalized to lowercase with underscores)
+# Valid anatomical locations (from training data)
+# These are the exact categories used during Model C training
 VALID_LOCATIONS = [
-    "head", "neck", "trunk", "upper_extremity", "lower_extremity",
-    "abdomen", "back", "chest", "arm", "leg", "hand", "foot", "face"
+    "Head & Neck",
+    "Left Arm",
+    "Left Leg",
+    "Right Arm",
+    "Right Leg",
+    "Torso Back",
+    "Torso Front",
+    "Unknown"
 ]
 
-# Sex encoding
-SEX_ENCODING = {
-    "male": 0,
-    "female": 1
-}
+# Categories dropped by get_dummies(drop_first=True) during training
+# When drop_first=True, pandas drops the FIRST category alphabetically
+DROPPED_LOCATION = "Head & Neck"  # First alphabetically
+DROPPED_SEX = "female"  # First alphabetically between "female" and "male"
 
 
 def normalize_location(location: str) -> str:
     """
-    Normalize location string to standardized format.
+    Normalize and validate location string.
 
     Args:
         location: Raw location string from user input
 
     Returns:
-        Normalized location string (lowercase with underscores)
+        Normalized location string matching training categories
 
     Raises:
         ValueError: If location is not valid
     """
-    # Convert to lowercase and replace spaces with underscores
-    normalized = location.lower().strip().replace(" ", "_")
+    # Handle common variations and normalize
+    location_map = {
+        # Exact matches (case-insensitive)
+        "head & neck": "Head & Neck",
+        "head and neck": "Head & Neck",
+        "head": "Head & Neck",
+        "neck": "Head & Neck",
+        "face": "Head & Neck",
 
-    # Validate
-    if normalized not in VALID_LOCATIONS:
-        raise ValueError(
-            f"Invalid location '{location}'. Must be one of: {', '.join(VALID_LOCATIONS)}"
-        )
+        "left arm": "Left Arm",
+        "left_arm": "Left Arm",
 
-    return normalized
+        "left leg": "Left Leg",
+        "left_leg": "Left Leg",
+
+        "right arm": "Right Arm",
+        "right_arm": "Right Arm",
+
+        "right leg": "Right Leg",
+        "right_leg": "Right Leg",
+
+        "torso back": "Torso Back",
+        "torso_back": "Torso Back",
+        "back": "Torso Back",
+
+        "torso front": "Torso Front",
+        "torso_front": "Torso Front",
+        "front": "Torso Front",
+        "chest": "Torso Front",
+        "abdomen": "Torso Front",
+
+        "unknown": "Unknown",
+    }
+
+    location_lower = location.lower().strip()
+
+    if location_lower in location_map:
+        normalized = location_map[location_lower]
+        logger.debug(f"Location '{location}' normalized to '{normalized}'")
+        return normalized
+
+    # Check if it's already in correct format
+    for valid_loc in VALID_LOCATIONS:
+        if location.strip() == valid_loc:
+            return valid_loc
+
+    raise ValueError(
+        f"Invalid location '{location}'. Valid options: {', '.join(VALID_LOCATIONS)}"
+    )
 
 
-def encode_sex(sex: str) -> int:
+def validate_sex(sex: str) -> str:
     """
-    Encode sex as binary integer.
+    Validate and normalize sex.
 
     Args:
-        sex: Sex string ("male" or "female")
+        sex: Sex string
 
     Returns:
-        Encoded sex (0 for male, 1 for female)
+        Normalized sex ("male" or "female")
 
     Raises:
         ValueError: If sex is not valid
     """
     sex_lower = sex.lower().strip()
 
-    if sex_lower not in SEX_ENCODING:
+    if sex_lower not in ["male", "female"]:
         raise ValueError(f"Invalid sex '{sex}'. Must be 'male' or 'female'")
 
-    return SEX_ENCODING[sex_lower]
+    return sex_lower
 
 
-def encode_location_onehot(location: str) -> np.ndarray:
+def validate_age(age: int) -> int:
     """
-    Encode location as one-hot vector.
-
-    Args:
-        location: Normalized location string
-
-    Returns:
-        One-hot encoded vector of length len(VALID_LOCATIONS)
-    """
-    # Normalize first
-    location = normalize_location(location)
-
-    # Create one-hot vector
-    onehot = np.zeros(len(VALID_LOCATIONS), dtype=np.float32)
-    index = VALID_LOCATIONS.index(location)
-    onehot[index] = 1.0
-
-    logger.debug(f"Location '{location}' encoded to index {index}")
-    return onehot
-
-
-def normalize_age(age: int, min_age: int = 0, max_age: int = 120) -> float:
-    """
-    Normalize age to [0, 1] range.
+    Validate age.
 
     Args:
         age: Age in years
-        min_age: Minimum valid age (default: 0)
-        max_age: Maximum valid age (default: 120)
 
     Returns:
-        Normalized age in [0, 1]
+        Validated age
 
     Raises:
-        ValueError: If age is out of valid range
+        ValueError: If age is invalid
     """
-    if age < min_age or age > max_age:
-        raise ValueError(f"Age {age} is out of valid range [{min_age}, {max_age}]")
+    if not isinstance(age, int) or age < 0 or age > 120:
+        raise ValueError(f"Invalid age: {age}. Must be integer between 0 and 120")
 
-    normalized = (age - min_age) / (max_age - min_age)
-    return float(normalized)
+    return age
 
 
-def normalize_diameter(diameter: float, min_diameter: float = 0.1, max_diameter: float = 50.0) -> float:
+def validate_diameter(diameter: float) -> float:
     """
-    Normalize diameter to reasonable range.
+    Validate diameter.
 
     Args:
         diameter: Diameter in millimeters
-        min_diameter: Minimum valid diameter (default: 0.1 mm)
-        max_diameter: Maximum valid diameter (default: 50 mm)
 
     Returns:
-        Normalized diameter
+        Validated diameter
 
     Raises:
-        ValueError: If diameter is out of valid range
+        ValueError: If diameter is invalid
     """
-    if diameter <= 0:
-        raise ValueError(f"Diameter must be positive, got {diameter}")
+    if not isinstance(diameter, (int, float)) or diameter <= 0:
+        raise ValueError(f"Invalid diameter: {diameter}. Must be positive number")
 
-    if diameter < min_diameter or diameter > max_diameter:
-        logger.warning(
-            f"Diameter {diameter} mm is outside typical range [{min_diameter}, {max_diameter}] mm"
-        )
-
-    # Simple min-max normalization
-    normalized = (diameter - min_diameter) / (max_diameter - min_diameter)
-    # Clip to [0, 1] in case of outliers
-    normalized = np.clip(normalized, 0.0, 1.0)
-
-    return float(normalized)
+    return float(diameter)
 
 
-def preprocess_metadata(
+def prepare_metadata_for_model_c(
     age: int,
     sex: str,
     location: str,
     diameter: float
-) -> Dict[str, any]:
+) -> pd.DataFrame:
     """
-    Preprocess all clinical metadata.
+    Prepare metadata for Model C using exact training preprocessing.
+
+    This function creates a DataFrame with one-hot encoded categorical variables
+    that exactly matches the encoding used during Model C training.
+
+    Process:
+    1. Validate inputs
+    2. Create DataFrame with raw values
+    3. Apply pd.get_dummies() with drop_first=True (matching training)
+
+    After get_dummies with drop_first=True:
+    - sex: creates "sex_male" (drops "female")
+    - location: creates 7 columns (drops "Head & Neck")
 
     Args:
         age: Patient age in years
         sex: Patient sex ("male" or "female")
-        location: Lesion location
+        location: Lesion anatomical location
         diameter: Lesion diameter in millimeters
 
     Returns:
-        Dictionary containing preprocessed features:
-        - age_normalized: float in [0, 1]
-        - sex_encoded: int (0 or 1)
-        - location_normalized: str (normalized format)
-        - location_onehot: np.ndarray (one-hot encoding)
-        - diameter_normalized: float in [0, 1]
+        DataFrame with encoded features: age_approx, clin_size_long_diam_mm,
+        sex_male, and 7 location columns (total 10 metadata features)
 
     Raises:
         ValueError: If any input is invalid
     """
-    try:
-        # Normalize age
-        age_norm = normalize_age(age)
+    # Validate inputs
+    age = validate_age(age)
+    sex = validate_sex(sex)
+    location = normalize_location(location)
+    diameter = validate_diameter(diameter)
 
-        # Encode sex
-        sex_enc = encode_sex(sex)
+    # Manual one-hot encoding to match training exactly
+    # This ensures we get the same columns as pd.get_dummies() with drop_first=True
 
-        # Normalize and encode location
-        location_norm = normalize_location(location)
-        location_onehot = encode_location_onehot(location_norm)
+    # Start with numerical features
+    encoded_data = {
+        "age_approx": [age],
+        "clin_size_long_diam_mm": [diameter],
+    }
 
-        # Normalize diameter
-        diameter_norm = normalize_diameter(diameter)
+    # Sex encoding: drop_first=True drops "female", keeps "sex_male"
+    # sex_male = 1 if sex is "male", 0 if sex is "female"
+    encoded_data["sex_male"] = [1 if sex == "male" else 0]
 
-        preprocessed = {
-            "age_normalized": age_norm,
-            "sex_encoded": sex_enc,
-            "location_normalized": location_norm,
-            "location_onehot": location_onehot,
-            "diameter_normalized": diameter_norm
-        }
+    # Location encoding: drop_first=True drops "Head & Neck" alphabetically
+    # Only create columns for non-dropped categories
+    location_columns = {
+        "Left Arm": "tbp_lv_location_simple_Left Arm",
+        "Left Leg": "tbp_lv_location_simple_Left Leg",
+        "Right Arm": "tbp_lv_location_simple_Right Arm",
+        "Right Leg": "tbp_lv_location_simple_Right Leg",
+        "Torso Back": "tbp_lv_location_simple_Torso Back",
+        "Torso Front": "tbp_lv_location_simple_Torso Front",
+        "Unknown": "tbp_lv_location_simple_Unknown"
+    }
 
-        logger.info(
-            f"Metadata preprocessed: age={age}→{age_norm:.3f}, "
-            f"sex={sex}→{sex_enc}, location={location}→{location_norm}, "
-            f"diameter={diameter}→{diameter_norm:.3f}"
-        )
+    # Create all location columns with 0, then set the correct one to 1
+    for loc_value, col_name in location_columns.items():
+        encoded_data[col_name] = [1 if location == loc_value else 0]
 
-        return preprocessed
+    # If location is "Head & Neck" (dropped), all location columns are 0
+    # This is correct behavior for drop_first=True
 
-    except Exception as e:
-        logger.error(f"Metadata preprocessing failed: {str(e)}")
-        raise ValueError(f"Failed to preprocess metadata: {str(e)}")
+    df_encoded = pd.DataFrame(encoded_data)
+
+    logger.debug(f"Metadata encoded into {len(df_encoded.columns)} columns")
+    logger.debug(f"  sex_male={df_encoded['sex_male'].values[0]}")
+    logger.debug(f"  location='{location}' (dropped='Head & Neck')")
+
+    return df_encoded
 
 
-def create_feature_vector_for_model_c(
-    extracted_features: np.ndarray,
-    age: int,
-    sex: str,
-    location: str,
-    diameter: float
-) -> np.ndarray:
+def normalize_diameter_for_model_b(diameter: float, mean: float, std: float) -> float:
     """
-    Create complete feature vector for Model C.
-
-    Combines:
-    - 18 features extracted by Model B
-    - Clinical metadata (age, sex, location, diameter)
+    Normalize diameter for Model B using training statistics.
 
     Args:
-        extracted_features: Array of 18 features from Model B
-        age: Patient age in years
-        sex: Patient sex
-        location: Lesion location
-        diameter: Lesion diameter in mm
+        diameter: Diameter in millimeters
+        mean: Mean from training data
+        std: Standard deviation from training data
 
     Returns:
-        Complete feature vector as numpy array (float32)
-
-    Raises:
-        ValueError: If inputs are invalid
+        Normalized diameter (z-score)
     """
-    # Validate extracted features
-    if len(extracted_features) != 18:
-        raise ValueError(f"Expected 18 features from Model B, got {len(extracted_features)}")
-
-    # Preprocess metadata
-    metadata = preprocess_metadata(age, sex, location, diameter)
-
-    # Combine features
-    # Order: [18 model B features, age, sex, diameter, location_onehot (13 values)]
-    feature_vector = np.concatenate([
-        extracted_features.flatten(),  # 18 features
-        [metadata["age_normalized"]],  # 1 feature
-        [metadata["sex_encoded"]],     # 1 feature
-        [metadata["diameter_normalized"]],  # 1 feature
-        metadata["location_onehot"]    # 13 features
-    ]).astype(np.float32)
-
-    logger.info(f"Created feature vector for Model C: shape={feature_vector.shape}, dtype={feature_vector.dtype}")
-
-    return feature_vector
+    diameter = validate_diameter(diameter)
+    normalized = (diameter - mean) / std
+    return float(normalized)
 
 
-def validate_metadata(age: int, sex: str, location: str, diameter: float) -> bool:
+def get_valid_locations() -> List[str]:
     """
-    Validate clinical metadata before preprocessing.
-
-    Args:
-        age: Patient age
-        sex: Patient sex
-        location: Lesion location
-        diameter: Lesion diameter
+    Get list of valid location values.
 
     Returns:
-        True if all metadata is valid
-
-    Raises:
-        ValueError: If any metadata is invalid
+        List of valid location strings
     """
-    # Validate age
-    if not isinstance(age, int) or age < 0 or age > 120:
-        raise ValueError(f"Invalid age: {age}. Must be integer between 0 and 120")
+    return VALID_LOCATIONS.copy()
 
-    # Validate sex
-    if sex.lower() not in ["male", "female"]:
-        raise ValueError(f"Invalid sex: {sex}. Must be 'male' or 'female'")
 
-    # Validate location
-    location_normalized = location.lower().strip().replace(" ", "_")
-    if location_normalized not in VALID_LOCATIONS:
-        raise ValueError(
-            f"Invalid location: {location}. Must be one of: {', '.join(VALID_LOCATIONS)}"
-        )
+def get_valid_sex_values() -> List[str]:
+    """
+    Get list of valid sex values.
 
-    # Validate diameter
-    if not isinstance(diameter, (int, float)) or diameter <= 0:
-        raise ValueError(f"Invalid diameter: {diameter}. Must be positive number")
-
-    logger.debug("Metadata validation passed")
-    return True
+    Returns:
+        List of valid sex strings
+    """
+    return ["male", "female"]

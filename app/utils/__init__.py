@@ -12,15 +12,17 @@ from .image_preprocessing import (
 )
 
 from .metadata_preprocessing import (
-    preprocess_metadata,
-    create_feature_vector_for_model_c,
-    validate_metadata,
-    normalize_age,
-    normalize_diameter,
-    encode_sex,
-    encode_location_onehot,
+    prepare_metadata_for_model_c,
+    normalize_location,
+    validate_sex,
+    validate_age,
+    validate_diameter,
+    normalize_diameter_for_model_b,
+    get_valid_locations,
+    get_valid_sex_values,
     VALID_LOCATIONS,
-    SEX_ENCODING
+    DROPPED_LOCATION,
+    DROPPED_SEX
 )
 
 __all__ = [
@@ -32,13 +34,15 @@ __all__ = [
     "IMAGENET_STD",
     "MODEL_INPUT_SIZE",
     # Metadata preprocessing
-    "preprocess_metadata",
-    "create_feature_vector_for_model_c",
-    "validate_metadata",
-    "normalize_age",
-    "normalize_diameter",
-    "encode_sex",
-    "encode_location_onehot",
+    "prepare_metadata_for_model_c",
+    "normalize_location",
+    "validate_sex",
+    "validate_age",
+    "validate_diameter",
+    "normalize_diameter_for_model_b",
+    "get_valid_locations",
+    "get_valid_sex_values",
     "VALID_LOCATIONS",
-    "SEX_ENCODING",
+    "DROPPED_LOCATION",
+    "DROPPED_SEX",
 ]

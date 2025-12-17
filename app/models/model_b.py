@@ -19,6 +19,7 @@ import numpy as np
 from typing import Optional, Tuple
 from app.core.config import settings
 from app.core.logger import logger
+from app.utils.metadata_preprocessing import normalize_diameter_for_model_b
 
 
 # Feature names (18 features predicted by Model B)
@@ -218,19 +219,20 @@ def normalize_diameter(diameter: float) -> float:
     """
     Normalize diameter using training statistics.
 
+    This function is now a wrapper around the centralized preprocessing function.
+
     Args:
         diameter: Lesion diameter in millimeters
 
     Returns:
-        Normalized diameter
+        Normalized diameter (z-score)
     """
-    # These values come from your training data
-    # diam_mean and diam_std from your notebook
-    diam_mean = settings.MODEL_B_DIAM_MEAN
-    diam_std = settings.MODEL_B_DIAM_STD
-
-    normalized = (diameter - diam_mean) / diam_std
-    return float(normalized)
+    # Use centralized preprocessing
+    return normalize_diameter_for_model_b(
+        diameter,
+        mean=settings.MODEL_B_DIAM_MEAN,
+        std=settings.MODEL_B_DIAM_STD
+    )
 
 
 def denormalize_features(features_normalized: np.ndarray) -> np.ndarray:

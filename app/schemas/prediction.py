@@ -4,6 +4,12 @@ Pydantic schemas for prediction request and response validation.
 
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Dict, Any
+from app.utils.metadata_preprocessing import (
+    normalize_location,
+    validate_sex,
+    get_valid_locations,
+    get_valid_sex_values
+)
 
 
 class PredictionRequest(BaseModel):
@@ -18,25 +24,17 @@ class PredictionRequest(BaseModel):
 
     @field_validator("sex")
     @classmethod
-    def validate_sex(cls, v: str) -> str:
+    def validate_sex_field(cls, v: str) -> str:
         """Validate sex field accepts only male or female."""
-        v_lower = v.lower()
-        if v_lower not in ["male", "female"]:
-            raise ValueError("Sex must be 'male' or 'female'")
-        return v_lower
+        # Use centralized validation
+        return validate_sex(v)
 
     @field_validator("location")
     @classmethod
-    def validate_location(cls, v: str) -> str:
+    def validate_location_field(cls, v: str) -> str:
         """Validate and normalize location field."""
-        valid_locations = [
-            "head", "neck", "trunk", "upper_extremity", "lower_extremity",
-            "abdomen", "back", "chest", "arm", "leg", "hand", "foot", "face"
-        ]
-        v_lower = v.lower().replace(" ", "_")
-        if v_lower not in valid_locations:
-            raise ValueError(f"Location must be one of: {', '.join(valid_locations)}")
-        return v_lower
+        # Use centralized validation and normalization
+        return normalize_location(v)
 
 
 class PredictionResponse(BaseModel):

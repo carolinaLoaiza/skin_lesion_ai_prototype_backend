@@ -45,7 +45,7 @@ async def predict_lesion(
         logger.info(f"Received prediction request - age: {age}, sex: {sex}, location: {location}, diameter: {diameter}")
 
         # Validate image file
-        if not image.content_type.startswith("image/"):
+        if not image.content_type or not image.content_type.startswith("image/"):
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid file type: {image.content_type}. Please upload an image file."

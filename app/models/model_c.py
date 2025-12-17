@@ -18,6 +18,7 @@ import pandas as pd
 from typing import Optional, Dict
 from app.core.logger import logger
 from app.core.config import settings
+from app.utils.metadata_preprocessing import prepare_metadata_for_model_c
 
 
 class ModelCLoader:
@@ -105,8 +106,8 @@ def prepare_features_for_model_c(
     """
     Prepare feature vector for Model C.
 
-    Combines Model B features with clinical metadata and applies
-    one-hot encoding for categorical variables.
+    Combines Model B features (18) with clinical metadata (10 after encoding)
+    to create the complete 28-feature input for Model C.
 
     Args:
         extracted_features: 18 features from Model B
@@ -116,7 +117,9 @@ def prepare_features_for_model_c(
         diameter: Lesion diameter in mm
 
     Returns:
-        DataFrame with features ready for Model C
+        DataFrame with 28 features ready for Model C:
+        - 18 Model B features
+        - 10 metadata features (age, diameter, sex_male, 7 location columns)
 
     Raises:
         ValueError: If inputs are invalid
@@ -127,7 +130,7 @@ def prepare_features_for_model_c(
             f"Expected 18 features from Model B, got {len(extracted_features)}"
         )
 
-    # Feature names from Model B
+    # Feature names from Model B (must match training exactly)
     model_b_feature_names = [
         "tbp_lv_A", "tbp_lv_B", "tbp_lv_C", "tbp_lv_H", "tbp_lv_L",
         "tbp_lv_areaMM2", "tbp_lv_area_perim_ratio", "tbp_lv_color_std_mean",
@@ -136,32 +139,24 @@ def prepare_features_for_model_c(
         "tbp_lv_perimeterMM", "tbp_lv_stdL", "tbp_lv_symm_2axis"
     ]
 
-    # Create base dataframe with Model B features + clinical inputs
-    data = {}
-
-    # Add Model B features
+    # Create DataFrame with Model B features
+    model_b_data = {}
     for i, feat_name in enumerate(model_b_feature_names):
-        data[feat_name] = [float(extracted_features[i])]
+        model_b_data[feat_name] = [float(extracted_features[i])]
 
-    # Add clinical metadata
-    data["age_approx"] = [int(age)]
-    data["clin_size_long_diam_mm"] = [float(diameter)]
-    data["sex"] = [sex.lower()]
-    data["tbp_lv_location_simple"] = [location.lower()]
+    df_model_b = pd.DataFrame(model_b_data)
 
-    df = pd.DataFrame(data)
+    # Prepare metadata using centralized preprocessing
+    # This handles validation, normalization, and one-hot encoding
+    df_metadata = prepare_metadata_for_model_c(age, sex, location, diameter)
 
-    # Apply one-hot encoding (matching training)
-    # drop_first=True to avoid dummy variable trap
-    df_encoded = pd.get_dummies(
-        df,
-        columns=["sex", "tbp_lv_location_simple"],
-        drop_first=True
-    )
+    # Combine Model B features + metadata features
+    # Concatenate horizontally (axis=1)
+    df_combined = pd.concat([df_model_b, df_metadata], axis=1)
 
-    logger.debug(f"Prepared {len(df_encoded.columns)} features for Model C")
+    logger.debug(f"Prepared {len(df_combined.columns)} features for Model C")
 
-    return df_encoded
+    return df_combined
 
 
 def predict_with_model_c(
