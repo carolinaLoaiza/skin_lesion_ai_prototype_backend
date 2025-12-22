@@ -61,7 +61,8 @@ async def root():
         "version": settings.APP_VERSION,
         "status": "running",
         "endpoints": {
-            "predict": "/predict",
+            "predict": "/api/predict",
+            "explain": "/api/explain",
             "health": "/health",
             "docs": "/docs"
         }

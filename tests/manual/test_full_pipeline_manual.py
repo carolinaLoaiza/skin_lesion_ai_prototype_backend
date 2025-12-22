@@ -1,11 +1,11 @@
 """
 Manual test script for the complete prediction pipeline.
 
-This script tests the full pipeline that combines all 3 models:
+This script tests the full pipeline using all 3 models:
 - Model A: DenseNet-121 (image -> probability)
 - Model B: ResNet-50 (image + diameter -> 18 features)
-- Model C: Random Forest (features + metadata -> probability)
-- Combines Model A + Model C with weighted average
+- Model C: XGBoost (features + metadata -> probability)
+- Returns individual probabilities without combining
 
 Usage:
     python tests/manual/test_full_pipeline_manual.py
@@ -23,9 +23,7 @@ from app.models import (
     extract_features_with_model_b,
     predict_with_model_c
 )
-from app.services.prediction_service import combine_predictions
 from app.utils import preprocess_image_from_path
-from app.core.config import settings
 
 
 def list_available_images():
@@ -69,8 +67,7 @@ def test_full_pipeline(
     2. Model A: image -> probability A
     3. Model B: image + diameter -> 18 features
     4. Model C: features + metadata -> probability C
-    5. Combine A + C -> final probability
-    6. Determine risk category
+    5. Return individual probabilities (no combining)
 
     Args:
         image_path: Path to the image file
@@ -89,54 +86,28 @@ def test_full_pipeline(
 
     try:
         # ========== STEP 1: Preprocess Image ==========
-        print("\n[STEP 1/6] Preprocessing image...")
+        print("\n[STEP 1/4] Preprocessing image...")
         image_array = preprocess_image_from_path(image_path)
         print(f"            Shape: {image_array.shape}")
         print(f"            Dtype: {image_array.dtype}")
         print(f"            Range: [{image_array.min():.3f}, {image_array.max():.3f}]")
 
         # ========== STEP 2: Model A Prediction ==========
-        print("\n[STEP 2/6] Running Model A (DenseNet-121 Image Classifier)...")
+        print("\n[STEP 2/4] Running Model A (DenseNet-121 Image Classifier)...")
         probability_a = predict_with_model_a(image_array)
         print(f"            Model A probability: {probability_a:.6f}")
 
         # ========== STEP 3: Model B Feature Extraction ==========
-        print("\n[STEP 3/6] Running Model B (ResNet-50 Feature Extractor)...")
+        print("\n[STEP 3/4] Running Model B (ResNet-50 Feature Extractor)...")
         features = extract_features_with_model_b(image_array, diameter)
         print(f"            Extracted {len(features)} features")
         print(f"            Feature range: [{features.min():.3f}, {features.max():.3f}]")
         print(f"            Feature mean: {features.mean():.3f}")
 
         # ========== STEP 4: Model C Prediction ==========
-        print("\n[STEP 4/6] Running Model C (Random Forest Tabular Classifier)...")
+        print("\n[STEP 4/4] Running Model C (XGBoost Tabular Classifier)...")
         probability_c = predict_with_model_c(features, age, sex, location, diameter)
         print(f"            Model C probability: {probability_c:.6f}")
-
-        # ========== STEP 5: Combine Predictions ==========
-        print("\n[STEP 5/6] Combining predictions...")
-        weight_a = settings.MODEL_A_WEIGHT
-        weight_c = settings.MODEL_C_WEIGHT
-        final_probability = combine_predictions(probability_a, probability_c)
-
-        print(f"            Model A weight: {weight_a}")
-        print(f"            Model C weight: {weight_c}")
-        print(f"            Final probability: {final_probability:.6f}")
-
-        # ========== STEP 6: Determine Risk Category ==========
-        print("\n[STEP 6/6] Determining risk category...")
-        if final_probability < 0.3:
-            risk_category = "LOW"
-        elif final_probability < 0.7:
-            risk_category = "MEDIUM"
-        else:
-            risk_category = "HIGH"
-
-        is_malignant = final_probability >= 0.5
-        confidence = abs(final_probability - 0.5) * 2
-
-        print(f"            Risk category: {risk_category}")
-        print(f"            Classification: {'MALIGNANT' if is_malignant else 'BENIGN'}")
-        print(f"            Confidence: {confidence:.2%}")
 
         # ========== RESULTS SUMMARY ==========
         print("\n" + "=" * 80)
@@ -145,18 +116,7 @@ def test_full_pipeline(
 
         print("\nMODEL OUTPUTS:")
         print(f"  Model A (DenseNet-121):     {probability_a:.2%}")
-        print(f"  Model C (Random Forest):    {probability_c:.2%}")
-        print(f"  Combined (Weighted Avg):    {final_probability:.2%}")
-
-        print("\nCLINICAL INTERPRETATION:")
-        print(f"  Malignancy Probability:     {final_probability:.2%}")
-        print(f"  Classification:             {'MALIGNANT' if is_malignant else 'BENIGN'}")
-        print(f"  Confidence Level:           {confidence:.2%}")
-        print(f"  Risk Category:              {risk_category}")
-
-        print("\nMODEL WEIGHTS:")
-        print(f"  Model A weight:             {weight_a}")
-        print(f"  Model C weight:             {weight_c}")
+        print(f"  Model C (XGBoost):          {probability_c:.2%}")
 
         print("\nFEATURES EXTRACTED (Model B):")
         print(f"  Number of features:         {len(features)}")
@@ -165,16 +125,18 @@ def test_full_pipeline(
         print(f"  Feature min:                {features.min():.4f}")
         print(f"  Feature max:                {features.max():.4f}")
 
+        print("\nMETADATA:")
+        print(f"  Age:                        {age} years")
+        print(f"  Sex:                        {sex}")
+        print(f"  Location:                   {location}")
+        print(f"  Diameter:                   {diameter} mm")
+
         print("=" * 80)
 
         return {
             "image": os.path.basename(image_path),
-            "final_probability": final_probability,
             "model_a_probability": probability_a,
             "model_c_probability": probability_c,
-            "risk_category": risk_category,
-            "is_malignant": is_malignant,
-            "confidence": confidence,
             "features": features.tolist(),
             "metadata": {
                 "age": age,
@@ -239,15 +201,12 @@ def test_all_images_pipeline(
         print("\n" + "=" * 80)
         print("SUMMARY - ALL IMAGES")
         print("=" * 80)
-        print(f"{'#':<3} {'Image':<30} {'Final':<8} {'Model A':<8} {'Model C':<8} {'Risk':<8} {'Class':<10}")
+        print(f"{'#':<3} {'Image':<35} {'Model A':<10} {'Model C':<10}")
         print("-" * 80)
         for i, result in enumerate(results, 1):
-            status = "MALIGNANT" if result["is_malignant"] else "BENIGN"
-            print(f"{i:<3} {result['image']:<30} "
-                  f"{result['final_probability']:.2%}   "
-                  f"{result['model_a_probability']:.2%}   "
-                  f"{result['model_c_probability']:.2%}   "
-                  f"{result['risk_category']:<8} {status:<10}")
+            print(f"{i:<3} {result['image']:<35} "
+                  f"{result['model_a_probability']:.2%}     "
+                  f"{result['model_c_probability']:.2%}")
         print("=" * 80)
 
 

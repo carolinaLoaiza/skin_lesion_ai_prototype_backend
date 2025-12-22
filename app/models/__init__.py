@@ -23,7 +23,8 @@ from .model_c import (
     predict_with_model_c,
     prepare_features_for_model_c,
     validate_model_c_exists,
-    get_model_c_info
+    get_model_c_info,
+    explain_prediction_with_shap
 )
 
 __all__ = [
@@ -45,4 +46,5 @@ __all__ = [
     "prepare_features_for_model_c",
     "validate_model_c_exists",
     "get_model_c_info",
+    "explain_prediction_with_shap",
 ]

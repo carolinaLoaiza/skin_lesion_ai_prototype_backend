@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     # Model Paths
     MODEL_A_PATH: str = "saved_models/model_a_densenet121_10k_final.pth"
     MODEL_B_PATH: str = "saved_models/model_b_resnet50_50k_final.pth"
-    MODEL_C_PATH: str = "saved_models/model_c_rf_5k_final.pkl"
+    MODEL_C_PATH: str = "saved_models/model_c_xgb_4k.pkl"
 
     # Model Configuration
     MODEL_A_THRESHOLD: float = 0.5  # Decision threshold for Model A

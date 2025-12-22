@@ -4,17 +4,15 @@ Prediction pipeline service.
 This module orchestrates the complete prediction pipeline using all 3 models:
 1. Model A: DenseNet-121 image classifier
 2. Model B: ResNet-50 feature extractor
-3. Model C: Random Forest classifier
+3. Model C: XGBoost classifier
 
-The final prediction combines Model A and Model C probabilities using
-a weighted average.
+Returns individual probabilities from Model A and Model C for separate display in frontend.
 """
 
 import numpy as np
 from typing import Dict
 from fastapi import UploadFile
 
-from app.core.config import settings
 from app.core.logger import logger
 from app.utils.image_preprocessing import preprocess_image_for_model_a
 from app.models import (
@@ -22,53 +20,6 @@ from app.models import (
     extract_features_with_model_b,
     predict_with_model_c,
 )
-
-
-def combine_predictions(
-    probability_a: float,
-    probability_c: float,
-    weight_a: float = None,
-    weight_c: float = None
-) -> float:
-    """
-    Combine predictions from Model A and Model C using weighted average.
-
-    Args:
-        probability_a: Probability from Model A [0, 1]
-        probability_c: Probability from Model C [0, 1]
-        weight_a: Weight for Model A (default from settings)
-        weight_c: Weight for Model C (default from settings)
-
-    Returns:
-        Combined probability [0, 1]
-
-    Example:
-        >>> prob_a = 0.6
-        >>> prob_c = 0.7
-        >>> final = combine_predictions(prob_a, prob_c, 0.5, 0.5)
-        >>> print(f"Final probability: {final:.3f}")
-        Final probability: 0.650
-    """
-    # Use settings if weights not provided
-    if weight_a is None:
-        weight_a = settings.MODEL_A_WEIGHT
-    if weight_c is None:
-        weight_c = settings.MODEL_C_WEIGHT
-
-    # Normalize weights to sum to 1
-    total_weight = weight_a + weight_c
-    weight_a_norm = weight_a / total_weight
-    weight_c_norm = weight_c / total_weight
-
-    # Weighted average
-    combined = (probability_a * weight_a_norm) + (probability_c * weight_c_norm)
-
-    logger.info(
-        f"Combined predictions: A={probability_a:.4f} (w={weight_a_norm:.2f}), "
-        f"C={probability_c:.4f} (w={weight_c_norm:.2f}) -> {combined:.4f}"
-    )
-
-    return float(combined)
 
 
 async def run_full_prediction_pipeline(
@@ -86,8 +37,7 @@ async def run_full_prediction_pipeline(
     2. Model A: Direct image -> probability
     3. Model B: Image + diameter -> 18 clinical features
     4. Model C: Features + metadata -> probability
-    5. Combine Model A and Model C predictions
-    6. Return comprehensive results
+    5. Return individual probabilities (no combining)
 
     Args:
         image_file: Uploaded image file
@@ -98,11 +48,10 @@ async def run_full_prediction_pipeline(
 
     Returns:
         Dictionary with:
-        - final_probability: Combined prediction [0, 1]
-        - model_a_probability: Model A prediction
-        - model_c_probability: Model C prediction
-        - extracted_features: 18 features from Model B
-        - risk_category: "low", "medium", or "high"
+        - model_a_probability: Model A (DenseNet-121) prediction [0, 1]
+        - model_c_probability: Model C (XGBoost) prediction [0, 1]
+        - extracted_features: 18 features from Model B (ResNet-50)
+        - metadata: Input metadata used for prediction
 
     Raises:
         ValueError: If inputs are invalid
@@ -113,10 +62,11 @@ async def run_full_prediction_pipeline(
         ...     image_file=file,
         ...     age=45,
         ...     sex="female",
-        ...     location="back",
+        ...     location="Torso Back",
         ...     diameter=6.5
         ... )
-        >>> print(f"Risk: {result['risk_category']}")
+        >>> print(f"Model A: {result['model_a_probability']:.2%}")
+        >>> print(f"Model C: {result['model_c_probability']:.2%}")
     """
     logger.info("Starting prediction pipeline")
     logger.info(f"Metadata: age={age}, sex={sex}, location={location}, diameter={diameter}mm")
@@ -138,7 +88,7 @@ async def run_full_prediction_pipeline(
         logger.info(f"Model B extracted {len(extracted_features)} features")
 
         # STEP 4: Model C prediction
-        logger.info("Step 4: Running Model C (Random Forest)")
+        logger.info("Step 4: Running Model C (XGBoost)")
         probability_c = predict_with_model_c(
             extracted_features,
             age,
@@ -148,22 +98,11 @@ async def run_full_prediction_pipeline(
         )
         logger.info(f"Model C probability: {probability_c:.4f}")
 
-        # STEP 5: Combine predictions
-        logger.info("Step 5: Combining predictions")
-        final_probability = combine_predictions(probability_a, probability_c)
-        logger.info(f"Final combined probability: {final_probability:.4f}")
-
-        # STEP 6: Determine risk category
-        risk_category = _determine_risk_category(final_probability)
-        logger.info(f"Risk category: {risk_category}")
-
-        # Prepare response
+        # Prepare response - return individual probabilities without combining
         result = {
-            "final_probability": round(final_probability, 4),
             "model_a_probability": round(probability_a, 4),
             "model_c_probability": round(probability_c, 4),
             "extracted_features": extracted_features.tolist(),
-            "risk_category": risk_category,
             "metadata": {
                 "age": age,
                 "sex": sex,
@@ -178,21 +117,3 @@ async def run_full_prediction_pipeline(
     except Exception as e:
         logger.error(f"Pipeline failed: {str(e)}")
         raise RuntimeError(f"Prediction pipeline failed: {str(e)}")
-
-
-def _determine_risk_category(probability: float) -> str:
-    """
-    Determine risk category based on malignancy probability.
-
-    Args:
-        probability: Malignancy probability [0, 1]
-
-    Returns:
-        Risk category: "low", "medium", or "high"
-    """
-    if probability < 0.3:
-        return "low"
-    elif probability < 0.7:
-        return "medium"
-    else:
-        return "high"
