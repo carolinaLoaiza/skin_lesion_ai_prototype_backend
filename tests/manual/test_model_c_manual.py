@@ -1,7 +1,8 @@
 """
-Manual test script for Model C (Random Forest classifier).
+Manual test script for Model C (XGBoost classifier).
 
-This script allows you to test Model C with extracted features and metadata.
+This script allows you to test Model C with extracted features and metadata,
+including SHAP explainability.
 
 Usage:
     python tests/manual/test_model_c_manual.py
@@ -9,6 +10,7 @@ Usage:
 Requirements:
     - Provide 18 features from Model B (or use synthetic data)
     - Provide clinical metadata: age, sex, location, diameter
+    - SHAP library for explainability
 """
 
 import sys
@@ -19,7 +21,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 import numpy as np
-from app.models import predict_with_model_c, extract_features_with_model_b
+from app.models import predict_with_model_c, extract_features_with_model_b, explain_prediction_with_shap
 from app.utils import preprocess_image_from_path
 
 
@@ -54,7 +56,8 @@ def test_model_c_with_features_only(
     age: int,
     sex: str,
     location: str,
-    diameter: float
+    diameter: float,
+    test_shap: bool = True
 ):
     """
     Test Model C with pre-extracted features and metadata.
@@ -65,30 +68,45 @@ def test_model_c_with_features_only(
         sex: Patient sex ("male" or "female")
         location: Lesion anatomical location
         diameter: Lesion diameter in millimeters
+        test_shap: Whether to test SHAP explainability (default: True)
     """
-    print("\n" + "=" * 70)
-    print("TESTING MODEL C (Random Forest Classifier) - Features Only Mode")
-    print("=" * 70)
+    print("\n" + "=" * 80)
+    print("TESTING MODEL C (XGBoost Classifier) - Features Only Mode")
+    print("=" * 80)
     print(f"Features: {len(features)} values")
     print(f"Metadata: age={age}, sex={sex}, location={location}, diameter={diameter} mm")
-    print("-" * 70)
+    print("-" * 80)
 
     try:
         # Display input features
-        print("\n[1/2] Input features from Model B:")
+        print("\n[1/3] Input features from Model B:")
         print(f"      Features shape: {features.shape}")
         print(f"      Features range: [{features.min():.3f}, {features.max():.3f}]")
         print(f"      Features mean:  {features.mean():.3f}")
 
         # Run Model C prediction
-        print("\n[2/2] Running Model C prediction...")
+        print("\n[2/3] Running Model C (XGBoost) prediction...")
         probability = predict_with_model_c(features, age, sex, location, diameter)
         print(f"      Raw probability: {probability:.6f}")
 
-        # Interpret results (same as Model A)
-        print("\n" + "=" * 70)
+        # Test SHAP explainability
+        explanation = None
+        if test_shap:
+            print("\n[3/3] Generating SHAP explanation...")
+            try:
+                explanation = explain_prediction_with_shap(features, age, sex, location, diameter)
+                print(f"      Base value: {explanation['base_value']:.4f}")
+                print(f"      Prediction: {explanation['prediction']:.4f}")
+                print(f"      Features explained: {len(explanation['shap_values'])}")
+            except Exception as e:
+                print(f"      SHAP failed: {str(e)}")
+        else:
+            print("\n[3/3] Skipping SHAP explanation (test_shap=False)")
+
+        # Interpret results
+        print("\n" + "=" * 80)
         print("RESULTS:")
-        print("=" * 70)
+        print("=" * 80)
         print(f"  Malignancy Probability: {probability:.2%}")
         print(f"  Classification:         {'MALIGNANT' if probability >= 0.5 else 'BENIGN'}")
         print(f"  Confidence:             {abs(probability - 0.5) * 2:.2%}")
@@ -101,12 +119,37 @@ def test_model_c_with_features_only(
         else:
             risk = "HIGH"
         print(f"  Risk Level:             {risk}")
-        print("=" * 70)
+        print("=" * 80)
+
+        # Display SHAP explanation if available
+        if explanation:
+            print("\nSHAP EXPLANATION - Top 10 Most Important Features:")
+            print("=" * 80)
+
+            # Create list of (name, shap_value, feature_value)
+            features_impact = list(zip(
+                explanation['feature_names'],
+                explanation['shap_values'],
+                explanation['feature_values']
+            ))
+
+            # Sort by absolute SHAP value
+            features_impact_sorted = sorted(features_impact, key=lambda x: abs(x[1]), reverse=True)
+
+            print(f"{'Feature Name':<40} {'SHAP Value':<15} {'Feature Value':<15} {'Impact'}")
+            print("-" * 80)
+
+            for name, shap_val, feat_val in features_impact_sorted[:10]:
+                impact = "Increases risk" if shap_val > 0 else "Decreases risk"
+                print(f"{name:<40} {shap_val:>14.6f} {feat_val:>14.3f} {impact}")
+
+            print("=" * 80)
 
         return {
             "probability": probability,
             "risk": risk,
-            "is_malignant": probability >= 0.5
+            "is_malignant": probability >= 0.5,
+            "shap_explanation": explanation
         }
 
     except Exception as e:
@@ -122,10 +165,11 @@ def test_model_c_with_image(
     age: int,
     sex: str,
     location: str,
-    diameter: float
+    diameter: float,
+    test_shap: bool = True
 ):
     """
-    Test complete pipeline: Image → Model B → Model C.
+    Test complete pipeline: Image → Model B → Model C → SHAP.
 
     Args:
         image_path: Path to the image file
@@ -133,40 +177,55 @@ def test_model_c_with_image(
         sex: Patient sex ("male" or "female")
         location: Lesion anatomical location
         diameter: Lesion diameter in millimeters
+        test_shap: Whether to test SHAP explainability (default: True)
     """
-    print("\n" + "=" * 70)
-    print("TESTING MODEL C (Random Forest Classifier) - Full Pipeline Mode")
-    print("=" * 70)
+    print("\n" + "=" * 80)
+    print("TESTING MODEL C (XGBoost Classifier) - Full Pipeline Mode")
+    print("=" * 80)
     print(f"Image:    {os.path.basename(image_path)}")
     print(f"Path:     {image_path}")
     print(f"Metadata: age={age}, sex={sex}, location={location}, diameter={diameter} mm")
-    print("-" * 70)
+    print("-" * 80)
 
     try:
         # Step 1: Preprocess image
-        print("\n[1/4] Preprocessing image...")
+        print("\n[1/5] Preprocessing image...")
         image_array = preprocess_image_from_path(image_path)
         print(f"      Shape: {image_array.shape}")
         print(f"      Dtype: {image_array.dtype}")
 
         # Step 2: Extract features with Model B
-        print("\n[2/4] Extracting features with Model B...")
+        print("\n[2/5] Extracting features with Model B (ResNet-50)...")
         features = extract_features_with_model_b(image_array, diameter)
         print(f"      Extracted {len(features)} features")
         print(f"      Feature range: [{features.min():.3f}, {features.max():.3f}]")
 
         # Step 3: Run Model C prediction
-        print("\n[3/4] Running Model C prediction...")
+        print("\n[3/5] Running Model C (XGBoost) prediction...")
         probability = predict_with_model_c(features, age, sex, location, diameter)
         print(f"      Raw probability: {probability:.6f}")
 
-        # Step 4: Interpret results
-        print("\n[4/4] Interpreting results...")
+        # Step 4: Test SHAP explainability
+        explanation = None
+        if test_shap:
+            print("\n[4/5] Generating SHAP explanation...")
+            try:
+                explanation = explain_prediction_with_shap(features, age, sex, location, diameter)
+                print(f"      Base value: {explanation['base_value']:.4f}")
+                print(f"      Prediction: {explanation['prediction']:.4f}")
+                print(f"      Features explained: {len(explanation['shap_values'])}")
+            except Exception as e:
+                print(f"      SHAP failed: {str(e)}")
+        else:
+            print("\n[4/5] Skipping SHAP explanation (test_shap=False)")
+
+        # Step 5: Interpret results
+        print("\n[5/5] Interpreting results...")
 
         # Visual result
-        print("\n" + "=" * 70)
+        print("\n" + "=" * 80)
         print("RESULTS:")
-        print("=" * 70)
+        print("=" * 80)
         print(f"  Malignancy Probability: {probability:.2%}")
         print(f"  Classification:         {'MALIGNANT' if probability >= 0.5 else 'BENIGN'}")
         print(f"  Confidence:             {abs(probability - 0.5) * 2:.2%}")
@@ -179,14 +238,38 @@ def test_model_c_with_image(
         else:
             risk = "HIGH"
         print(f"  Risk Level:             {risk}")
-        print("=" * 70)
+        print("=" * 80)
 
         # Feature summary
         print("\nFEATURE SUMMARY (Model B → Model C):")
         print(f"  Number of features extracted: {len(features)}")
         print(f"  Feature mean:                 {features.mean():.4f}")
         print(f"  Feature std:                  {features.std():.4f}")
-        print("=" * 70)
+        print("=" * 80)
+
+        # Display SHAP explanation if available
+        if explanation:
+            print("\nSHAP EXPLANATION - Top 10 Most Important Features:")
+            print("=" * 80)
+
+            # Create list of (name, shap_value, feature_value)
+            features_impact = list(zip(
+                explanation['feature_names'],
+                explanation['shap_values'],
+                explanation['feature_values']
+            ))
+
+            # Sort by absolute SHAP value
+            features_impact_sorted = sorted(features_impact, key=lambda x: abs(x[1]), reverse=True)
+
+            print(f"{'Feature Name':<40} {'SHAP Value':<15} {'Feature Value':<15} {'Impact'}")
+            print("-" * 80)
+
+            for name, shap_val, feat_val in features_impact_sorted[:10]:
+                impact = "Increases risk" if shap_val > 0 else "Decreases risk"
+                print(f"{name:<40} {shap_val:>14.6f} {feat_val:>14.3f} {impact}")
+
+            print("=" * 80)
 
         return {
             "image": os.path.basename(image_path),
@@ -194,6 +277,7 @@ def test_model_c_with_image(
             "risk": risk,
             "is_malignant": probability >= 0.5,
             "features": features.tolist(),
+            "shap_explanation": explanation,
             "metadata": {
                 "age": age,
                 "sex": sex,

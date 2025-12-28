@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     # CORS
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]
 
+    # MongoDB Configuration
+    MONGODB_URI: str = "mongodb://localhost:27017"
+    MONGODB_DB_NAME: str = "skin_lesion_triage_db"
+
     class Config:
         env_file = ".env"
         case_sensitive = True

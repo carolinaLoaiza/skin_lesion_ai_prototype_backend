@@ -5,10 +5,10 @@ Verifies that the model can be loaded and make predictions.
 
 import numpy as np
 from app.models import (
-    validate_model_exists,
+    validate_model_a_exists,
     predict_with_model_a,
     apply_threshold,
-    get_model_info
+    get_model_a_info
 )
 
 
@@ -18,7 +18,7 @@ def test_model_exists():
     print("TEST 1: Check if Model A file exists")
     print("="*60)
 
-    exists = validate_model_exists()
+    exists = validate_model_a_exists()
 
     if exists:
         print("[OK] Model A file found")
@@ -35,7 +35,7 @@ def test_model_loading():
 
     try:
         # Get model info (this will trigger loading)
-        info = get_model_info()
+        info = get_model_a_info()
 
         print("[OK] Model loaded successfully")
         print(f"   Model: {info['model_name']}")

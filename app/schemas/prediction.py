@@ -65,6 +65,10 @@ class PredictionResponse(BaseModel):
         ...,
         description="Input metadata used for prediction"
     )
+    analysis_id: str | None = Field(
+        None,
+        description="Analysis ID if saved to database (when patient_id and lesion_id provided)"
+    )
 
     class Config:
         json_schema_extra = {
@@ -85,7 +89,8 @@ class PredictionResponse(BaseModel):
 
 class FeatureContribution(BaseModel):
     """Individual feature contribution to the prediction."""
-    feature_name: str = Field(..., description="Name of the feature")
+    feature_name: str = Field(..., description="Technical name of the feature")
+    display_name: str = Field(..., description="User-friendly display name for frontend")
     shap_value: float = Field(..., description="SHAP value (contribution to prediction)")
     feature_value: float = Field(..., description="Actual value of the feature")
     impact: str = Field(..., description="'increases' or 'decreases' risk")
@@ -123,18 +128,21 @@ class ExplanationResponse(BaseModel):
                 "feature_contributions": [
                     {
                         "feature_name": "tbp_lv_norm_color",
+                        "display_name": "Normalized Color Variation",
                         "shap_value": -0.803790,
                         "feature_value": 3.0,
                         "impact": "decreases"
                     },
                     {
                         "feature_name": "tbp_lv_H",
+                        "display_name": "Hue Angle (Inside Lesion)",
                         "shap_value": -0.758406,
                         "feature_value": 55.0,
                         "impact": "decreases"
                     },
                     {
                         "feature_name": "tbp_lv_deltaA",
+                        "display_name": "A* Color Contrast",
                         "shap_value": 0.527082,
                         "feature_value": 5.0,
                         "impact": "increases"

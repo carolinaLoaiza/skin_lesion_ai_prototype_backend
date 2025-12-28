@@ -25,6 +25,13 @@ from .metadata_preprocessing import (
     DROPPED_SEX
 )
 
+from .feature_names import (
+    get_friendly_name,
+    get_all_feature_mappings,
+    format_feature_for_display,
+    FEATURE_DISPLAY_NAMES
+)
+
 __all__ = [
     # Image preprocessing
     "preprocess_image_for_model_a",
@@ -45,4 +52,9 @@ __all__ = [
     "VALID_LOCATIONS",
     "DROPPED_LOCATION",
     "DROPPED_SEX",
+    # Feature name mapping
+    "get_friendly_name",
+    "get_all_feature_mappings",
+    "format_feature_for_display",
+    "FEATURE_DISPLAY_NAMES",
 ]
