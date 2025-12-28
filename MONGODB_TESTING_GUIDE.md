@@ -256,7 +256,7 @@ print(f"Número de análisis: {len(response.json())}")
 ### Opción A: MongoDB Compass
 
 1. Descarga MongoDB Compass: https://www.mongodb.com/products/compass
-2. Conecta con tu URI: `mongodb+srv://vcloaizacarvajal:UYMdwsv8cK4I0T9f@projectdb.cw3vtth.mongodb.net/`
+2. Conecta con tu URI desde el archivo `.env` (variable `MONGODB_URI`)
 3. Selecciona la base de datos: `skin_lesion_triage_db`
 4. Verás 3 colecciones:
    - `patients`
@@ -320,9 +320,10 @@ print(f"Número de análisis: {len(response.json())}")
 **Solución**:
 1. Verifica tu archivo `.env`:
    ```
-   MONGODB_URI=mongodb+srv://vcloaizacarvajal:UYMdwsv8cK4I0T9f@projectdb.cw3vtth.mongodb.net/
+   MONGODB_URI=mongodb+srv://USERNAME:PASSWORD@CLUSTER.mongodb.net/
    MONGODB_DB_NAME=skin_lesion_triage_db
    ```
+   Reemplaza `USERNAME`, `PASSWORD` y `CLUSTER` con tus credenciales de MongoDB Atlas.
 2. Verifica que tu IP esté en la lista blanca de MongoDB Atlas
 3. Revisa los logs de la aplicación
 
