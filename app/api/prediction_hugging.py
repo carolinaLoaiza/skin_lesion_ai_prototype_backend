@@ -331,7 +331,9 @@ async def predict_lesion(
                     lesion_id=lesion_id,
                     image=ImageData(
                         filename=image_info["filename"],
-                        path=image_info["path"]
+                        path=image_info["path"],
+                        content_type=image_info["content_type"],
+                        data=image_info["data"]
                     ),
                     clinical_data=ClinicalData(
                         age_at_capture=age,

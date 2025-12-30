@@ -3,7 +3,7 @@ REST API endpoints for Analysis Cases management.
 """
 
 from fastapi import APIRouter, HTTPException, Query, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from typing import List
 import os
 
@@ -14,6 +14,7 @@ from app.data.models.analysis import (
     AnalysisCaseUpdate,
     AnalysisCaseResponse,
 )
+from app.core.logger import logger
 
 router = APIRouter(prefix="/api/analyses", tags=["analyses"])
 
@@ -103,28 +104,30 @@ async def get_analysis(analysis_id: str):
 
 @router.get(
     "/{analysis_id}/image",
-    response_class=FileResponse,
     summary="Get analysis image"
 )
 async def get_analysis_image(analysis_id: str):
     """
     Get the lesion image associated with an analysis case.
 
-    This endpoint returns the actual image file that was uploaded
-    for this analysis. The image is served directly as a file response.
+    This endpoint retrieves the image binary data stored in MongoDB
+    and returns it with the appropriate content-type header.
+
+    NOTE: Images are stored in MongoDB to support Render.com deployment
+    (free tier has no persistent disk storage).
 
     Args:
         analysis_id: The unique analysis identifier (e.g., "AN-001")
 
     Returns:
-        FileResponse: The image file (JPEG/PNG)
+        Response: The image binary data with appropriate media type
 
     Raises:
-        HTTPException 404: If analysis not found or image file doesn't exist
-        HTTPException 500: If error reading image file
+        HTTPException 404: If analysis not found or image data doesn't exist
+        HTTPException 500: If error retrieving image
     """
     try:
-        # Get analysis to retrieve image path
+        # Get analysis to retrieve image data
         analysis = await analysis_manager.get_analysis(analysis_id)
         if not analysis:
             raise HTTPException(
@@ -132,21 +135,24 @@ async def get_analysis_image(analysis_id: str):
                 detail=f"Analysis '{analysis_id}' not found"
             )
 
-        # Get image path from analysis
-        image_path = analysis.image.path
+        # Get image data from analysis
+        image_data = analysis.image
 
-        # Verify file exists
-        if not os.path.exists(image_path):
+        if not image_data.data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Image file not found for analysis '{analysis_id}'"
+                detail=f"Image data not found for analysis '{analysis_id}'"
             )
 
-        # Return image file
-        return FileResponse(
-            path=image_path,
-            media_type="image/jpeg",
-            filename=analysis.image.filename
+        logger.info(f"Serving image for analysis {analysis_id}: {image_data.filename}")
+
+        # Return image as binary response
+        return Response(
+            content=image_data.data,
+            media_type=image_data.content_type,
+            headers={
+                "Content-Disposition": f'inline; filename="{image_data.filename}"'
+            }
         )
 
     except HTTPException:
