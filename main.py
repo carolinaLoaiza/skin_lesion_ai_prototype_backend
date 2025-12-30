@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.logger import logger
-from app.api import prediction, patients, lesions, analyses
+from app.api import prediction_hugging, patients, lesions, analyses
 from app.data.database import db
 
 
@@ -45,7 +45,7 @@ async def startup_event():
         logger.error(f"Failed to connect to MongoDB: {str(e)}")
         logger.warning("Application will continue without database support")
 
-    # Models will be loaded lazily on first request or can be preloaded here
+    # Models are hosted on Hugging Face Space - no local model loading needed
     logger.info("Application startup complete")
 
 
@@ -105,7 +105,7 @@ async def health_check():
 
 
 # Include routers
-app.include_router(prediction.router, prefix="/api", tags=["prediction"])
+app.include_router(prediction_hugging.router, prefix="/api", tags=["prediction"])
 app.include_router(patients.router, tags=["patients"])
 app.include_router(lesions.router, tags=["lesions"])
 app.include_router(lesions.patients_router, tags=["lesions"])  # Patient-specific lesion endpoints
